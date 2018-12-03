@@ -29,19 +29,7 @@ avaliable_feature_type = ['Only_Time_Field', 'Only_Frequency_Field', 'Only_PCA_F
 assert(use_feature_type in avaliable_feature_type)
 
 train_folders = {
-            'shangfei':['x2', 'x10', 'x30'],
-            '4':['Arm_102Shell_', 'Arm_103Shell_', 'Arm_104Shell_', 'Box_101Shell_'],
-            '3':['Arm_102X_20_-', 'Arm_102X_20_+', 'Arm_102Y_20_-', 'Arm_102Y_20_+', 'Arm_102Z_20_-', \
-                'Arm_102Z_20_+'],
-            '3':['Box_101X_20_-', 'Box_101X_20_+', 'Box_101Y_20_-', 'Box_101Y_20_+', 'Box_101Z_20_-', \
-                'Box_101Z_20_+'],
-            # '3':['Arm_104X_20_-', 'Arm_104X_20_+', 'Arm_104Y_20_-', 'Arm_104Y_20_+', 'Arm_104Z_20_-', \
-            # 'Arm_104Z_20_+'],
-            '3':['Arm_103X_20_-', 'Arm_103X_20_+', 'Arm_103Y_20_-', 'Arm_103Y_20_+', 'Arm_103Z_20_-', \
-                'Arm_103Z_20_+'],
-            '5':['Arm_104_3_A2_No', 'Box_101_3_A2_No', 'Box_101_2_A2_30_-', 'Arm_104_2_A2_30_-', 'Arm_104_A2_30_+', 'Box_101_A2_30_+'],
-            '6':['Arm_103_3_A2_20_-', 'Arm_103_3_A2_20_+', 'Arm_103_3_A2_30_-', 'Arm_103_3_X_10_-', 'Arm_103_3_X_10_+', 'Box_101_3_A2_30_+_2'],
-            'lanqing0926':['down', 'left', 'right', 'up']
+            'letter':['a', 'h']
             }
 
 ### 此处添加文件相关信息 ###

@@ -5,7 +5,7 @@
 @Func:    使用商飞接口，只用来收集和绘制数据
 '''
 
-import socket, time, numpy as np
+import socket, time
 window_length = 10
 
 # Decode
@@ -22,14 +22,6 @@ def Decode(content):
             one_package_data.append(num)
         i += 1
     return one_package_data
-
-# Sample
-def reduce_sample_rate(package_list, sample_rate):
-    package_list = np.array(package_list)
-    length_ = len(package_list)
-    sample_loc = list(range(0, length_, sample_rate))
-    sample_array = package_list[sample_loc]
-    return sample_array
 
 # Write
 def write_one_window_into_file(file_name, D2_list_):
