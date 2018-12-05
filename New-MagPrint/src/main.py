@@ -5,6 +5,7 @@
 @Func:    Read data and Preprocess
 '''
 import numpy as np
+import keras as K
 from sklearn import metrics
 from keras.utils import to_categorical
 from sklearn.externals import joblib
@@ -17,8 +18,13 @@ from functions import gauss_filter, fft_transform, divide_files_by_name, read_si
 
 # 控制训练时间
 TimeStep = 30
-LSTM_unit = 128
-epochs, batch_size = 100, 32
+LSTM_unit = 256
+epochs, batch_size = 200, 128
+callbacks_list = [
+    K.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=30),  # 30 epoch no improvement
+    K.callbacks.ModelCheckpoint(model_folder + 'LSTM_Model.df5',
+     monitor='val_loss', verbose=1, save_best_only=True, mode='min', period=1) 
+    ]
 
 # LSTM Model
 def get_LSTM_model(c):
@@ -30,14 +36,17 @@ def get_LSTM_model(c):
     # model.add(Dense(64, activation='softmax'))
     model.add(Dense(NB_CLASS, activation='softmax'))
     model.summary()
-    model.compile(loss='binary_crossentropy', optimizer='adam')
+    model.compile(loss='categorical_crossentropy', optimizer='adam')
     return model
 
 # Preprocess
 def process_a_file(array_, category, after_fft_data):
     # Reshape
     array_ = np.array(array_)
-    rows, cols = array_.shape
+    if len(array_.shape) > 2:
+        _, rows, cols = array_.shape
+    else:
+        rows, cols = array_.shape
     array_ = array_.reshape([rows * cols, 1])   
     i = 0
     numerical_feature_list, fft_window_list = [], []
@@ -61,42 +70,54 @@ def process_a_file(array_, category, after_fft_data):
 # Main process
 def data_prepare(input_folder, different_category, after_fft_data_folder):
     file_dict = divide_files_by_name(input_folder, different_category)
-    fft_list, num_list, label = [], [], []
+    train_fft_list, train_num_list, train_label, test_fft_list, test_num_list, test_label = [], [], [], [], [], []
     # Loop All categories
     for category in different_category:
-        files_list = []
+        train_file, test_file = [], []
         # Loop all files per category
         for one_category_single_file in file_dict[category]:
             file_array = read_single_txt_file_new(one_category_single_file)
-            files_list.append(file_array)
-        file_array_one_category = vstack_list(files_list)
-        fft_feature, num_feature = process_a_file(file_array_one_category, category, after_fft_data_folder)  
-        # Merge the files
-        tmp_label = [category] * len(fft_feature)
-        fft_list.append(fft_feature)  
-        num_list.append(num_feature) 
-        label += tmp_label
+            if 'train' in one_category_single_file:
+                train_file.append(file_array)
+            else:
+                test_file.append(file_array)
+        # Generate
+        train_one_category = vstack_list(train_file)
+        train_fft_feature, train_num_feature = process_a_file(train_one_category, category, after_fft_data_folder)  
+        test_one_category = vstack_list(test_file)
+        test_fft_feature, test_num_feature = process_a_file(test_one_category, category, after_fft_data_folder)  
+        tmp_train_label = [category] * len(train_fft_feature)
+        tmp_test_label = [category] * len(test_fft_feature)
+        # Merge
+        train_fft_list.append(train_fft_feature)
+        test_fft_list.append(test_fft_feature)
+        train_num_list.append(train_num_feature)
+        test_num_list.append(test_num_feature)
+        train_label += tmp_train_label
+        test_label += tmp_test_label
     # Merge all categories
-    fft_data = vstack_list(fft_list)
-    num_feature = vstack_list(num_list)
+    train_fft_data = vstack_list(train_fft_list)
+    train_num_feature = vstack_list(train_num_list)
+    test_fft_data = vstack_list(test_fft_list)
+    test_num_feature = vstack_list(test_num_list)    
     # Preprocess
-    data = feature_logic(fft_data, num_feature, 'train')
-    label_OneHot, _ = label_encoder(label, 'train')
-    data = min_max_scaler(data) 
-    print('Shape of data,shape of label:', data.shape, label_OneHot.shape)
-    return data, label_OneHot
+    train_data = feature_logic(train_fft_data, train_num_feature, 'train')
+    test_data = feature_logic(test_fft_data, test_num_feature, 'train')
+    train_label_Encoder, _ = label_encoder(train_label, 'train')
+    test_label_Encoder, _ = label_encoder(test_label, 'train')
+    train_data = min_max_scaler(train_data) 
+    test_data = min_max_scaler(test_data) 
+    print('Shape of train,shape of test:', train_data.shape, test_data.shape)
+    return train_data, test_data, train_label_Encoder, test_label_Encoder
 
 # Baseline: RF
-def train_baseline(data, label):  
+def train_baseline(train_data, test_data, train_label_Encoder, test_label_Encoder):  
     # Initial
-    print('All samples shape before training Baseline: ', data.shape)
     file_write, train_wt = model_folder + 'best_model', None
     test_classifiers = ['RF']
     classifiers = {'KNN':knn_classifier, 'RF':random_forest_classifier }
     scores_Save, model_dict, accuracy_all_list = [], {}, []
-    # Split
-    X_train, X_test_left, y_train, y_test_left = train_test_split(data, label, test_size=test_ratio, shuffle=whether_shuffle_train_and_test)
-    X, y = X_train, y_train
+    X, y = train_data, train_label_Encoder
     # Using Multiple Classifiers
     for classifier in test_classifiers:
         scores = []
@@ -140,32 +161,43 @@ def train_baseline(data, label):
         model_sort.append(test_classifiers[index])
     # Final Test
     model = model_dict[model_name]  #### 使用全部数据，使用保存的，模型进行实验    
-    predict_y_left = model.predict(X_test_left)  # now do the final test
-    accuracy = metrics.accuracy_score(y_test_left, predict_y_left)
-    f2 = metrics.confusion_matrix(y_test_left, predict_y_left)
+    predict_y_left = model.predict(test_data)  # now do the final test
+    accuracy = metrics.accuracy_score(test_label_Encoder, predict_y_left)
+    f2 = metrics.confusion_matrix(test_label_Encoder, predict_y_left)
     print ('Final test accuracy: %f' % accuracy)
     print('Matrix:\n', f2.astype(int))
     return  accuracy_all_list, max_score
 
 # Train LSTM
-def LSTM_train(data, label):
+def LSTM_train(train_data, test_data, train_label_Encoder, test_label_Encoder):
     # Reshape
-    r, c = data.shape
+    r, c = train_data.shape
     new_r = int(r // TimeStep) 
-    data = data[:new_r * TimeStep, :].reshape([new_r, TimeStep, c])
-    label = label[:new_r * TimeStep].reshape([new_r, TimeStep])    
-    label = label[:, -1].reshape([len(label), 1])
-    print('Prepared data and label shape:', data.shape, label.shape)
+    train_data = train_data[:new_r * TimeStep, :].reshape([new_r, TimeStep, c])
+    train_label = train_label_Encoder[:new_r * TimeStep].reshape([new_r, TimeStep])    
+    train_label = train_label[:, -1].reshape([len(train_label), 1])
+    # #
+    r, c = test_data.shape
+    new_r = int(r // TimeStep) 
+    test_data = test_data[:new_r * TimeStep, :].reshape([new_r, TimeStep, c])
+    test_label = test_label_Encoder[:new_r * TimeStep].reshape([new_r, TimeStep])    
+    test_label = test_label[:, -1].reshape([len(test_label), 1])
+    print('Prepared data and label shape:', train_data.shape, test_data.shape)
     # Split
-    X_train, X_test, y_train, y_test = train_test_split(data, label, test_size=test_ratio, shuffle=whether_shuffle_train_and_test)
+    X_train, y_train, X_test, y_test = train_data, train_label, test_data, test_label
+    del test_label_Encoder, train_label_Encoder, train_data, train_label, test_data, test_label
     X_train, X_validate, y_train, y_validate = train_test_split(X_train, y_train, test_size=evaluation_ratio, shuffle=whether_shuffle_train_and_test)
     y_train = to_categorical(y_train)
     y_test = to_categorical(y_test)
     y_validate = to_categorical(y_validate)     
     # Train
     model = get_LSTM_model(c)
-    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_validate, y_validate), verbose=1)
-    re = model.predict(X_test)
+    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
+              validation_data=(X_test, y_test),  # Overwrite
+              callbacks=callbacks_list, verbose=1)
+    # Predict
+    best_model = K.models.load_model(model_folder + 'LSTM_Model.df5')
+    re = best_model.predict(X_test)
     # Score
     actual_y_list, prediction_y_list = [], []
     for item in y_test:
@@ -181,11 +213,11 @@ def Main(train_folder_defineByUser):
     # Config
     train_keyword, train_folder, _, _, train_tmp, _, _, _, model_folder, _ = generate_configs(train_folders, train_folder_defineByUser, base_folder)
     # Prepare
-    data, label = data_prepare(train_folder, train_keyword, train_tmp)  #### 读数据
+    train_data, test_data, train_label_Encoder, test_label_Encoder = data_prepare(train_folder, train_keyword, train_tmp)
     # Train
-    train_baseline(data, label)  #### 训练KNN、RF等传统模型
-    LSTM_train(data, label)
-    check_model()
+    # train_baseline(train_data, test_data, train_label_Encoder, test_label_Encoder)  #### 训练KNN、RF等传统模型
+    LSTM_train(train_data, test_data, train_label_Encoder, test_label_Encoder)
+    # check_model()
     
 if __name__ == '__main__':
     Main('letter')
