@@ -1,15 +1,15 @@
 # coding:utf-8
 '''
-@time:    Created on  2018-09-10 20:06:59
-@author:  Lanqing
-@Func:    Define Useful Functions Used in All the Project
+    @time:    Created on  2018-09-10 20:06:59
+    @author:  Lanqing
+    @Func:    Define Useful Functions Used in All the Project
 '''
+
 import numpy as np
 from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split
 from config import model_folder, use_pca, saved_dimension_after_pca, \
-    test_ratio, whether_shuffle_train_and_test, sample_rate, use_fft, use_gauss, max_entries, n_estimators, rawFile_read_lines
-from collections import deque
+    test_ratio, whether_shuffle_train_and_test, sample_rate, use_fft, use_gauss, n_estimators, rawFile_read_lines, use_feature_type
 
 def divide_files_by_name(folder_name, different_category):
     '''
@@ -63,7 +63,7 @@ def gauss_filter(X, sigma):
         return gaussian_X
     else:
         return X
-    
+      
 def numericalFeather(singleColumn):
     '''
         Capture the statistic features of a window
@@ -75,7 +75,7 @@ def numericalFeather(singleColumn):
     static = [medianL, varL, meanL]
     return np.array(static)
 
-def one_hot_coding(data, train_test_flag):
+def label_encoder(data, train_test_flag):
     '''
         Transform label like 'surfing'/'music' to number between 0-classes-1
         The One-Hot model will be saved to local '.m' file 
@@ -97,33 +97,6 @@ def min_max_scaler(train_data):
     train_data = XX.transform(train_data) 
     joblib.dump(XX, model_folder + "Min_Max.m")
     return train_data
-
-def PCA(X):
-    '''
-        Reducing Dimensions using PCA
-        The model will be saved to local '.m' file
-    '''
-    if use_pca:
-        from sklearn.decomposition import PCA
-        pca = PCA(n_components=saved_dimension_after_pca)
-        X = pca.fit_transform(X)
-        fee = pca.components_
-        re_saved_dimension_after_pca = saved_dimension_after_pca
-        if fee.shape[0] < 3 or fee.shape[0] > 50:
-            if fee.shape[0] < 3:
-                if saved_dimension_after_pca > 1:
-                    re_saved_dimension_after_pca = 5
-                elif saved_dimension_after_pca < 1:
-                    if saved_dimension_after_pca < 0.99:
-                        re_saved_dimension_after_pca = 0.99
-                    elif saved_dimension_after_pca < 0.999:
-                        re_saved_dimension_after_pca = 0.9999
-            elif fee.shape[0] > 50:
-                re_saved_dimension_after_pca = 10
-            pca = PCA(n_components=re_saved_dimension_after_pca)
-            X = pca.fit_transform(X)
-        joblib.dump(pca, model_folder + "PCA.m")
-    return X
 
 def vstack_list(tmp):
     '''
@@ -157,24 +130,6 @@ def hstack_list(tmp):
     else:
         data = np.array(tmp)  
     return data
-
-def train_test_evalation_split(data, label): 
-    '''
-        Split data into train and test
-    '''
-    X_train, X_test, y_train, y_test = train_test_split(data, label, test_size=test_ratio, random_state=0, shuffle=whether_shuffle_train_and_test)
-    return X_train, X_test, y_train, y_test
-
-def split_train_Validate_test(data, vali_prcnt, test_prcnt):   
-    ''' 
-        Cut data into train,predict,feather,label ,twice
-    ''' 
-    rs = 10
-    target = data[:, -1]
-    value = data[:, :-1]
-    X_train, X_test, y_train, y_test = train_test_split(value, target, test_size=vali_prcnt, random_state=rs, shuffle=whether_shuffle_train_and_test)  # default 0.2
-    X_valdt, X_test, y_valdt, y_test = train_test_split(X_test, y_test, test_size=test_prcnt, random_state=rs, shuffle=whether_shuffle_train_and_test)
-    return X_train, X_test, y_train, y_test, X_valdt, y_valdt
 
 def validatePR(prediction_y_list, actual_y_list):
     ''' 
@@ -226,9 +181,8 @@ def check_model():
     '''
         Load model and print the corresponding meaning of the predicted models
     '''
-    from sklearn.externals import joblib
     label_encoder = joblib.load(model_folder + "Label_Encoder.m")
-    # print(label_encoder.classes_)
+    print('\n输出类别对应关系：\t', label_encoder.classes_, '\n')
     return label_encoder
 
 def knn_classifier(trainX, trainY, train_wt):  
@@ -249,12 +203,53 @@ def random_forest_classifier(trainX, trainY, train_wt):
     model.fit(trainX, trainY, train_wt)
     return model
 
-def generate_configs(train_keyword, train_keyword_):
+def PCA(X):
     '''
-        Re-Generate configs when having to change the processing folder 
+        Reducing Dimensions using PCA
+        The model will be saved to local '.m' file
+    '''
+    if use_pca:
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=saved_dimension_after_pca)
+        X = pca.fit_transform(X)
+        joblib.dump(pca, model_folder + "PCA.m")
+    return X
+
+def feature_logic(fft_data, num_feature, train_test_flag):    
+    ''' 
+        Support different feature method.
+        For now the most effective method is using FFT after PCA.
+    '''
+    if 'PCA' not in use_feature_type:
+        if use_feature_type == 'Only_Time_Field':
+            data = num_feature
+        elif use_feature_type == 'Only_Frequency_Field':
+            data = fft_data
+        elif use_feature_type == 'Time+Frequency':
+            data = np.hstack((num_feature, fft_data))
+    elif 'PCA' in use_feature_type:
+        if 'train' in train_test_flag:
+            if use_feature_type == 'Only_PCA_Frequency':
+                fft_data = PCA(fft_data)
+                data = fft_data
+            elif use_feature_type == 'Time+PCA_Frequency':
+                fft_data = PCA(fft_data)
+                data = np.hstack((num_feature, fft_data))
+        elif 'predict' in train_test_flag:
+            pca = joblib.load(model_folder + "PCA.m")
+            fft_data = pca.transform(fft_data.T)
+            if use_feature_type == 'Only_PCA_Frequency':
+                data = fft_data
+            elif use_feature_type == 'Time+PCA_Frequency':
+                data = np.hstack((num_feature.T, fft_data))
+    return data
+
+def generate_configs(train_keyword, train_keyword_, base_folder):
+    '''
+        Re-Generate config when having to change the processing folder 
     '''
     import os
-    base = '../data/' 
+    base = base_folder 
     print('The folder you want to process is:\t', train_keyword_)
     train_keyword___ = train_keyword[train_keyword_]
     print('The train_keyword are:\t', train_keyword___)
@@ -304,80 +299,3 @@ def generate_configs(train_keyword, train_keyword_):
         fid.write('\n')
     return train_keyword___, train_folder, test_folder, predict_folder, \
         train_tmp, test_tmp, predict_tmp, train_tmp_test, model_folder, len(train_keyword_)    
-
-def plot(name, values):
-    '''
-        Plot Raw Data For Helping Decision
-    '''
-    import matplotlib.pyplot as plt
-    values = np.array(values)
-    values = values.reshape([values.shape[0] * values.shape[1], 1])  # Generate List
-    indexList = np.array(list(range(int(len(values))))) / 10
-    base_output = ''  # 'C:/Users/jhh/Desktop/History_data/explore/figures/'    
-    linewidth = 1
-    yDown, yUp = np.min(values), np.max(values)
-    fig = plt.figure(figsize=(10, 6))  # (figsize=(100, 20))    
-    ax = fig.add_subplot(111) 
-    plt.xticks(fontsize=20)
-    plt.yticks(fontsize=20)
-    plt.axis([0, len(indexList) / 10, yDown, yUp])  # 0.240 0.2455 50ms #0.2375, 0.245 100ms
-    plt.xlabel("Sample Time (second) ", size=24)
-    plt.ylabel("Magnetic Signal (uT)", size=24) 
-    plt.title('%s' % str(name)) 
-    ax.plot(indexList, values, 'b-', linewidth=linewidth)
-    plt.savefig(base_output + '%s.png' % name)
-    plt.ion()
-    plt.pause(1)   
-    plt.close()
-    # plt.show()
-    # print('saved to %s' % (base_output + name))
-    return
-
-def logistics(top1, label_list, prior_ones, top_list):
-    '''
-        Add Logistics for Presentations, including some skills and using text information 
-    '''
-    #     if top1 == 'safari_surfing':
-    #         if 'tencent_video' in label_list :
-    #             top1 = 'tencent_video'
-    #         # if prior_ones != 'safari_surfing':
-    #         #    top1 = 'NoLoad'
-    #         if 'NoLoad' in label_list:
-    #             top1 = 'NoLoad'
-    #     if top1 == 'zuma_game':
-    #         if 'tencent_video' in label_list and label_list.count('tencent_video') > 4:
-    #             top1 = 'tencent_video'
-    if top1 == 'tencent_video':
-        if 'zuma_game' in label_list and label_list.count('zuma_game') > 1:
-            top1 = 'zuma_game'
-        if prior_ones == 'zuma_game':
-            top1 = 'zuma_game'
-    # if not top_list:
-    #   top1 = 'NoLoad'
-    return top1, prior_ones
-
-class RealtimePlot:
-    
-    def __init__(self, axes, max_entries=max_entries):
-        self.axis_x = deque(maxlen=max_entries)
-        self.axis_y = deque(maxlen=max_entries)
-        self.axes = axes
-        self.max_entries = max_entries
-        
-        self.lineplot, = axes.plot([], [], "w-")
-        self.axes.set_autoscaley_on(True)
-
-    def add(self, x, y):
-        self.axis_x.extend(x)
-        self.axis_y.extend(y)
-        self.lineplot.set_data(self.axis_x, self.axis_y)
-        self.axes.set_xlim(self.axis_x[0], self.axis_x[-1] + 1e-15)
-        self.axes.relim(); self.axes.autoscale_view()  # rescale the y-axis
-
-    def animate(self, figure, callback, interval=50):
-        import matplotlib.animation as animation
-        def wrapper(frame_index):
-            self.add(*callback(frame_index))
-            self.axes.relim(); self.axes.autoscale_view()  # rescale the y-axis
-            return self.lineplot
-        animation.FuncAnimation(figure, wrapper, interval=interval)
