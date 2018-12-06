@@ -18,7 +18,7 @@ from functions import gauss_filter, fft_transform, divide_files_by_name, read_si
 
 # 控制训练时间
 TimeStep = 30
-LSTM_unit = 256
+LSTM_unit = 1024
 epochs, batch_size = 200, 128
 callbacks_list = [
     K.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=30),  # 30 epoch no improvement
@@ -207,6 +207,9 @@ def LSTM_train(train_data, test_data, train_label_Encoder, test_label_Encoder):
     accu = metrics.accuracy_score(actual_y_list, prediction_y_list)
     f2 = metrics.confusion_matrix(actual_y_list, prediction_y_list)
     print('Confusion Matrix of LSTM:\n', f2, '\n Accuracy:', accu)
+    
+def predict():
+    return
 
 # Main
 def Main(train_folder_defineByUser):

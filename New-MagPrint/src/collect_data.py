@@ -53,4 +53,5 @@ def new_real_time(file_folder, collect_time):
                 break
 
 # #  Collect  ##
-new_real_time('C:/Users/jhh/Desktop/null.txt', 3)  # file name,collect minutes
+if __name__ == '__main__':
+    new_real_time('C:/Users/jhh/Desktop/null.txt', 3)  # file name,collect minutes

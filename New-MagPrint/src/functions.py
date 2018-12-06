@@ -182,7 +182,7 @@ def check_model():
         Load model and print the corresponding meaning of the predicted models
     '''
     label_encoder = joblib.load(model_folder + "Label_Encoder.m")
-    print('\n输出类别对应关系：\t', label_encoder.classes_, '\n')
+    # print('\n输出类别对应关系：\t', label_encoder.classes_, '\n')
     return label_encoder
 
 def knn_classifier(trainX, trainY, train_wt):  
